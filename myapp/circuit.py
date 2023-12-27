@@ -15,6 +15,7 @@ class Gene:
         self.value = v
 
     def get_value(self):
+        print(self.name, self.value)
         return self.value
 
     def set_normalized_value(self, v):
@@ -26,7 +27,12 @@ class Gene:
 
 
 def create_inducer(gene_out, gene_in, n=3):
-    f = lambda g: biocircuits.act_hill(g, 3)
+    f = lambda g: biocircuits.act_hill(g, n)
+    return Circuit(f, gene_out, gene_in)
+
+
+def create_repressor(gene_out, gene_in, n=3):
+    f = lambda g: biocircuits.rep_hill(g, n)
     return Circuit(f, gene_out, gene_in)
 
 
@@ -36,7 +42,7 @@ class Circuit:
         self.genes_in = genes_in
 
         def eval_func():
-            gene_levels = [gene.get_normalized_value() for gene in self.genes_in]
+            gene_levels = [gene.get_value() for gene in self.genes_in]
             out = f(*gene_levels)
             self.gene_out.set_normalized_value(out)
 
