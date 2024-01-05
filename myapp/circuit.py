@@ -5,48 +5,58 @@ import biocircuits
 
 
 class Gene:
-    def __init__(self, name, initial_value=0, bounds=(0, 1)):
+    def __init__(self, name, vi=0, k=1):
         self.name = name
-        self.value = initial_value
-        self.min, self.max = bounds
+        self.value = vi
+        # k is used for normalization; genes levels in circuits are calculated as value / k
+        self.k = k
 
     def set_value(self, v):
-        assert 0 <= self.min and v <= self.max
         self.value = v
 
+    def change_value(self, v):
+        self.value += v
+        self.value = max(self.value, 0)  # cannot be less than 0
+
     def get_value(self):
-        print(self.name, self.value)
         return self.value
 
-    def set_normalized_value(self, v):
-        assert 0 <= v and v <= 1
-        self.value = self.max * v + (1 - v) * self.min
+    def get_normal(self):
+        return self._raw_to_normal(self.value)
 
-    def get_normalized_value(self):
-        return (self.value - self.min) / (self.max - self.min)
+    def _raw_to_normal(self, v):
+        return v / self.k
 
-
-def create_inducer(gene_out, gene_in, n=3):
-    f = lambda g: biocircuits.act_hill(g, n)
-    return Circuit(f, gene_out, gene_in)
-
-
-def create_repressor(gene_out, gene_in, n=3):
-    f = lambda g: biocircuits.rep_hill(g, n)
-    return Circuit(f, gene_out, gene_in)
+    def _normal_to_raw(self, nv):
+        return nv * self.k
 
 
 class Circuit:
-    def __init__(self, f, gene_out, *genes_in):
-        self.gene_out = gene_out
-        self.genes_in = genes_in
+    def __init__(self, func, genes_in: list[Gene], gene_out: Gene):
+        self.func = func
+        self.genes_in = genes_in  # list of genes
+        self.gene_out = gene_out  # single gene
 
-        def eval_func():
-            gene_levels = [gene.get_value() for gene in self.genes_in]
-            out = f(*gene_levels)
-            self.gene_out.set_normalized_value(out)
+    def get_step(self, dt):
+        # deferred evaluation of output genes so all genes can be updated at once
+        # gene_out changed based on calculated production rate and dt
+        gene_levels = [gene.get_normal() for gene in self.genes_in]
+        prod_level = self.func(*gene_levels, dt)
 
-        self.eval_func = eval_func
+        step = lambda: self.gene_out.change_value(prod_level)
+        return step
 
-    def run(self):
-        self.eval_func()
+
+def create_linear(gene_in, gene_out, rate=1):
+    func = lambda x, dt: x * rate * dt
+    return Circuit(func, [gene_in], gene_out)
+
+
+def create_inducer(gene_in, gene_out, vmax=1, n=1):
+    func = lambda x, dt: biocircuits.act_hill(x, n) * vmax * dt
+    return Circuit(func, [gene_in], gene_out)
+
+
+def create_repressor(gene_in, gene_out, vmax=1, n=1):
+    func = lambda x, dt: biocircuits.rep_hill(x, n) * vmax * dt
+    return Circuit(func, [gene_in], gene_out)
